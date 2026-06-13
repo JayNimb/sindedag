@@ -66,6 +66,7 @@
         .version-tag { position: fixed; bottom: 5px; right: 5px; color: #475569; font-size: 10px; font-family: monospace; z-index: 9999; pointer-events: none; }
     </style>
 
+    <!-- FIREBASE REALTIDS-MOTOR -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -339,6 +340,37 @@
                     } else {
                         document.getElementById('gd-night-shield-info').innerHTML = "";
                     }
+
+                    // --- MANUEL STYRING (OVERRIDE) LOGIC ---
+                    const gdOverrideZone = document.getElementById('gd-override-zone');
+                    const gdOverrideOD = document.getElementById('gd-override-od');
+                    const gdOverrideDitte = document.getElementById('gd-override-ditte');
+                    let showOverrideZone = false;
+
+                    // Områdedirektør
+                    if (aliveRoles.includes('Områdedirektør') && !scapegoatId) {
+                        showOverrideZone = true;
+                        gdOverrideOD.classList.remove('hidden');
+                        let odOpts = '<option value="">-- Vælg Syndebuk --</option>';
+                        Object.keys(players).filter(id => players[id].isAlive && players[id].role !== "Områdedirektør").forEach(id => {
+                            odOpts += `<option value="${id}">${players[id].name} (${players[id].role})</option>`;
+                        });
+                        document.getElementById('gd-override-od-select').innerHTML = odOpts;
+                    } else { gdOverrideOD.classList.add('hidden'); }
+
+                    // Ditte
+                    if (aliveRoles.includes('Ditte') && !ditteChoiceDone) {
+                        showOverrideZone = true;
+                        gdOverrideDitte.classList.remove('hidden');
+                        let ditteOpts = '<option value="">-- Vælg Mellemleder --</option>';
+                        Object.keys(players).filter(id => players[id].isAlive && players[id].role === "Medarbejder").forEach(id => {
+                            ditteOpts += `<option value="${id}">${players[id].name}</option>`;
+                        });
+                        document.getElementById('gd-override-ditte-select').innerHTML = ditteOpts;
+                    } else { gdOverrideDitte.classList.add('hidden'); }
+
+                    if (showOverrideZone) gdOverrideZone.classList.remove('hidden');
+                    else gdOverrideZone.classList.add('hidden');
                 }
             }
 
@@ -539,6 +571,7 @@
                 alert("Syndebuk valgt! Systemet husker dem automatisk, hvis Mellemlederne forsøger at fyre dig om natten.");
             }
         };
+
         window.ditteChooseManager = function() {
             const target = document.getElementById('ditte-target-select').value;
             if(target) { 
@@ -547,6 +580,25 @@
                 alert("Ny Mellemleder valgt i skjul!");
             }
         };
+
+        // --- MANUEL STYRING (OVERRIDE FUNKTIONER) ---
+        window.gdOverrideScapegoat = function() {
+            const target = document.getElementById('gd-override-od-select').value;
+            if(target) {
+                update(ref(db, `rooms/${currentRoom}`), { scapegoatId: target });
+                alert("Generaldirektøren har udpeget syndebukken på vegne af Områdedirektøren!");
+            }
+        };
+
+        window.gdOverrideDitte = function() {
+            const target = document.getElementById('gd-override-ditte-select').value;
+            if(target) {
+                update(ref(db, `rooms/${currentRoom}/players/${target}`), { role: "Mellemleder" }); 
+                update(ref(db, `rooms/${currentRoom}`), { ditteChoiceDone: true }); 
+                alert("Generaldirektøren har valgt den nye Mellemleder på vegne af Ditte!");
+            }
+        };
+
         window.declareLove = function() {
             const target = document.getElementById('couple-target-select').value;
             if(!target) return;
@@ -558,6 +610,7 @@
                 push(ref(db, `rooms/${currentRoom}/linkedin`), { from: myName, msg: `💔 Akavet. Jeg erklærede kærlighed til den forkerte. Jeg fritstiller mig selv.` });
             }
         };
+
         window.gdAssignBoardMember = function() {
             const id = document.getElementById('gd-bm-select').value;
             if(id) {
@@ -565,10 +618,12 @@
                 push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Generaldirektøren", msg: `💼 Velkommen til ${globalPlayers[id].name} i bestyrelsen! (Har nu 2 stemmer)` });
             }
         };
+
         window.triggerBoardReveal = function() {
             update(ref(db, `rooms/${currentRoom}`), { boardMemberRevealed: true });
             push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Bestyrelsen", msg: "🔍 Bestyrelsen har åbnet arkiverne. Rollen på alle fyrede ansatte kan nu ses!" });
         };
+
         window.transferBoardMember = function() {
             const nextId = document.getElementById('bm-transfer-select').value;
             if(nextId) {
@@ -777,6 +832,28 @@
                 <ul id="gd-wakeup-list" class="wakeup-list" style="list-style:none; padding:0; margin:0;"></ul>
             </div>
 
+            <!-- NYT MANUELT STYRING KORT TIL GD OVERRIDE -->
+            <div id="gd-override-zone" class="card hidden" style="border-top: 4px solid var(--color-amber);">
+                <h3 style="color:var(--color-amber);">🕹️ Manuel Styring (Specialroller)</h3>
+                <p style="font-size:12px; color:var(--text-muted); margin-bottom:15px;">Brug dette, hvis spilleren peger i virkeligheden for at undgå at bruge telefonen i nat. Panelet forsvinder automatisk, når et valg er truffet.</p>
+                
+                <div id="gd-override-od" class="hidden" style="margin-bottom:15px;">
+                    <label style="font-weight:bold; font-size:14px;">👑 Områdedirektørens Syndebuk:</label>
+                    <div style="display:flex; gap:8px; margin-top:5px;">
+                        <select id="gd-override-od-select" style="margin:0;"></select>
+                        <button onclick="gdOverrideScapegoat()" class="btn-amber" style="width:auto; padding:0 20px; margin:0;">Vælg</button>
+                    </div>
+                </div>
+
+                <div id="gd-override-ditte" class="hidden">
+                    <label style="font-weight:bold; font-size:14px;">📣 Dittes Ekstra Mellemleder:</label>
+                    <div style="display:flex; gap:8px; margin-top:5px;">
+                        <select id="gd-override-ditte-select" style="margin:0;"></select>
+                        <button onclick="gdOverrideDitte()" class="btn-amber" style="width:auto; padding:0 20px; margin:0;">Vælg</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="card" style="border-top: 4px solid var(--color-primary);">
                 <h3 style="color:var(--color-primary);">🚨 Ny Strategi (Forfremmelse)</h3>
                 <p style="font-size:12px; color:var(--text-muted);">Udnævn en normal medarbejder til Mellemleder. Effekten (og flash-alarmen) ruller ud for alle, når du skifter til 'Dag'.</p>
@@ -821,7 +898,8 @@
         </div>
     </div>
 
-    <div class="version-tag">v1.2</div>
+    <!-- VERSION FOOTER -->
+    <div class="version-tag">v1.3</div>
 
 </body>
 </html>
