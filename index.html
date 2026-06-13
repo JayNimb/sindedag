@@ -195,24 +195,6 @@
                     } else {
                         document.getElementById('player-wait-zone').classList.add('hidden');
                         
-                        // Action Pulse Alert Logic
-                        let hasPendingAction = false;
-                        if (me.role === "Områdedirektør" && !scapegoatId) hasPendingAction = true;
-                        if (me.role === "Ditte" && !ditteChoiceDone) hasPendingAction = true;
-
-                        const btnReveal = document.getElementById('btn-reveal-role');
-                        if (btnReveal) {
-                            if (hasPendingAction) {
-                                btnReveal.innerHTML = "🚨 DU HAR EN HANDLING! (Vis Rolle)";
-                                btnReveal.style.background = "#ef4444";
-                                btnReveal.style.animation = "flashRed 1.5s infinite alternate";
-                            } else {
-                                btnReveal.innerHTML = "👁️ Vis min hemmelige rolle";
-                                btnReveal.style.background = "var(--color-amber)";
-                                btnReveal.style.animation = "none";
-                            }
-                        }
-
                         if (isRoleVisible) {
                             document.getElementById('player-role-hidden-zone').classList.add('hidden');
                             document.getElementById('player-role-revealed-zone').classList.remove('hidden');
@@ -227,6 +209,17 @@
                         if (me.role === "Mellemleder") {
                             const others = Object.keys(players).filter(id => id !== myPlayerId && players[id].role === "Mellemleder").map(id => players[id].name);
                             displayDesc += "\n\n🤫 Andre mellemledere: " + (others.length > 0 ? others.join(", ") : "Ingen");
+                        }
+
+                        // Action Pulse Alert (Inside the revealed zone)
+                        let hasPendingAction = false;
+                        if (me.role === "Områdedirektør" && !scapegoatId) hasPendingAction = true;
+                        if (me.role === "Ditte" && !ditteChoiceDone) hasPendingAction = true;
+
+                        const actionAlert = document.getElementById('player-action-alert');
+                        if (actionAlert) {
+                            if (hasPendingAction) actionAlert.classList.remove('hidden');
+                            else actionAlert.classList.add('hidden');
                         }
 
                         // OMRAADE-DIREKTØR ZONE
@@ -506,7 +499,6 @@
             alert("Skjold tildelt!");
         };
 
-        // INTELLIGENT FYRINGSLOGIK MED SPECIELLE ROLLER
         window.gdFirePlayer = function() {
             const pId = document.getElementById('gd-fire-select').value;
             if(!pId) return;
@@ -519,17 +511,14 @@
                 const scapegoatId = roomData.scapegoatId || "";
                 const targetPlayer = roomData.players[pId] || {};
 
-                // 1. Tjenestemandsskjold check
                 if(shieldId === pId && phase === "MELLEMLEDERSEMINAR (NAT)") {
                     return alert("⚠️ Denne person er beskyttet af Tjenestemandsskjoldet i nat og KAN IKKE fyres!");
                 }
                 
-                // 2. Praktikant immunitet
                 if(phase === "MELLEMLEDERSEMINAR (NAT)" && targetPlayer.role === "Praktikant") {
                     return alert("⚠️ Denne person er Praktikant og er IMMUN overfor natlige fyringer!");
                 }
 
-                // 3. Områdedirektør Syndebuk Logic (kun om natten)
                 if(phase === "MELLEMLEDERSEMINAR (NAT)" && targetPlayer.role === "Områdedirektør" && scapegoatId) {
                     const scapegoat = roomData.players[scapegoatId];
                     if (scapegoat && scapegoat.isAlive) {
@@ -539,10 +528,8 @@
                     }
                 }
 
-                // 4. Normal fyring eksekveres
                 update(ref(db, `rooms/${currentRoom}/players/${pId}`), { isAlive: false });
                 
-                // 5. Kåre vinder-alert (Gælder altid)
                 if(targetPlayer.role === "Kåre") {
                     alert(`🤯 ${targetPlayer.name} (KÅRE) ER BLEVET FYRET!\nKåre har netop vundet spillet, fordi det var hans skjulte mission!`);
                 }
@@ -581,7 +568,6 @@
             }
         };
 
-        // --- MANUEL STYRING (OVERRIDE FUNKTIONER) ---
         window.gdOverrideScapegoat = function() {
             const target = document.getElementById('gd-override-od-select').value;
             if(target) {
@@ -715,6 +701,8 @@
             <div id="player-role-revealed-zone" class="hidden" style="background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: left;">
                 <h2 id="player-role-display" style="color: var(--color-amber); margin-bottom: 10px; text-align: center;">Rolle: -</h2>
                 
+                <div id="player-action-alert" class="hidden" style="background:#ef4444; color:#fff; font-weight:bold; padding:10px; border-radius:6px; margin-bottom:15px; animation: flashRed 1.5s infinite alternate; text-align:center;">🚨 DU HAR EN HANDLING DER VENTER!</div>
+
                 <div id="player-od-zone" class="hidden" style="margin-bottom:15px; border: 2px solid var(--color-amber); padding: 10px; border-radius: 6px;"></div>
                 <div id="player-ditte-zone" class="hidden" style="background:#1e293b; padding:10px; border-radius:6px; margin-bottom:15px; border:2px solid var(--color-amber);"></div>
                 <div id="player-couple-zone" class="hidden" style="background:#1e293b; padding:10px; border-radius:6px; margin-bottom:15px; border:2px solid #f43f5e;"></div>
@@ -733,6 +721,7 @@
         </div>
     </div>
 
+    <!-- Generaldirektør og Storskærm sektioner uændret -->
     <div id="view-gd-login" class="view-section">
         <div class="card">
             <h2>Generaldirektion</h2>
@@ -832,7 +821,6 @@
                 <ul id="gd-wakeup-list" class="wakeup-list" style="list-style:none; padding:0; margin:0;"></ul>
             </div>
 
-            <!-- NYT MANUELT STYRING KORT TIL GD OVERRIDE -->
             <div id="gd-override-zone" class="card hidden" style="border-top: 4px solid var(--color-amber);">
                 <h3 style="color:var(--color-amber);">🕹️ Manuel Styring (Specialroller)</h3>
                 <p style="font-size:12px; color:var(--text-muted); margin-bottom:15px;">Brug dette, hvis spilleren peger i virkeligheden for at undgå at bruge telefonen i nat. Panelet forsvinder automatisk, når et valg er truffet.</p>
@@ -899,7 +887,7 @@
     </div>
 
     <!-- VERSION FOOTER -->
-    <div class="version-tag">v1.3</div>
+    <div class="version-tag">v1.4</div>
 
 </body>
 </html>
