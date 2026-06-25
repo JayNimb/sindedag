@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sindedag Multiplayer</title>
+    <title>Sindedag Multiplayer v1.6</title>
     <style>
         :root {
             --bg-main: #0f172a; --bg-card: #1e293b; --bg-input: #0f172a;
@@ -24,6 +24,7 @@
         .btn-danger { background: var(--color-danger); }
         .btn-amber { background: var(--color-amber); }
         .btn-success { background: var(--color-success); }
+        .btn-back { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); margin-bottom: 20px; }
         .btn-select { background: #334155; padding: 20px; font-size: 18px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .hidden { display: none !important; }
         
@@ -41,14 +42,20 @@
         
         /* OVERLAYS & ANIMATIONS */
         .overlay-screen { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; animation: fadeIn 0.3s forwards; }
-        .overlay-night { background: rgba(10, 15, 25, 0.95); backdrop-filter: blur(10px); }
+        .overlay-night-screen { position: absolute; top: 0; left: 0; right: 0; height: 120px; background: rgba(10, 15, 25, 0.9); z-index: 500; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 2px solid var(--border-color); }
         .overlay-strategy { background: rgba(99, 102, 241, 0.95); animation: flashBg 2s infinite alternate; }
+
+        /* VICTORY SCREENS */
+        .victory-ml { background: #000; color: #fff; border: 10px solid #333; }
+        .victory-med { background: linear-gradient(-45deg, #10b981, #3b82f6, #8b5cf6, #ec4899); background-size: 400% 400%; animation: gradientBg 5s ease infinite; color: #fff; }
+        .victory-kaare { background: #ef4444; color: #fff; animation: flashRed 0.5s infinite alternate; }
         
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes flashBg { from { background: rgba(99, 102, 241, 0.95); } to { background: rgba(79, 70, 229, 0.95); } }
-        @keyframes flashRed { from { background: #ef4444; } to { background: #991b1b; } }
+        @keyframes flashRed { from { background: #ef4444; } to { background: #7f1d1d; } }
+        @keyframes gradientBg { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
         
-        /* 🖥️ STORSKÆRM */
+        /* STORSKÆRM */
         .storskærm-layout { 
             grid-template-columns: 1fr 1.2fr 1.2fr; 
             gap: 20px; max-width: 100vw; height: 96vh; margin: 2vh auto; padding: 0 20px; align-items: stretch;
@@ -57,16 +64,23 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        .badge-title { background: var(--color-amber); color: #000; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-left: 4px;}
+        .badge-title { background: var(--color-amber); color: #000; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-left: 4px; }
+        .badge-silence { background: var(--color-danger); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-left: 4px; animation: flashRed 1s infinite alternate; }
         
         .gd-nav-bar { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid var(--border-color); padding-bottom: 16px; }
         .wakeup-list li { margin-bottom: 10px; font-size: 15px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; }
 
-        /* VERSION FOOTER */
+        .reconnect-box { background: rgba(16, 185, 129, 0.1); border: 2px solid var(--color-success); padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+
+        /* Rolle-leksikon */
+        details summary { cursor: pointer; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; font-weight: bold; border: 1px solid var(--border-color); list-style: none; }
+        details summary::-webkit-details-marker { display: none; }
+        .lexicon-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #334155; }
+        .lexicon-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
         .version-tag { position: fixed; bottom: 5px; right: 5px; color: #475569; font-size: 10px; font-family: monospace; z-index: 9999; pointer-events: none; }
     </style>
 
-    <!-- FIREBASE REALTIDS-MOTOR -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -78,21 +92,24 @@
             projectId: "sindedag",
             storageBucket: "sindedag.firebasestorage.app",
             messagingSenderId: "405522362117",
-            appId: "1:405522362117:web:f2020173dc6227918c916c",
-            measurementId: "G-2R3F13JHWD"
+            appId: "1:405522362117:web:f2020173dc6227918c916c"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
         let currentRoom = "";
-        let myPlayerId = localStorage.getItem("myPlayerId") || "p_" + Math.random().toString(36).substr(2, 5);
-        localStorage.setItem("myPlayerId", myPlayerId);
+        let myPlayerId = localStorage.getItem("myPlayerId");
+        if (!myPlayerId) {
+            myPlayerId = "p_" + Math.random().toString(36).substr(2, 5);
+            localStorage.setItem("myPlayerId", myPlayerId);
+        }
+        let savedRoom = localStorage.getItem("savedRoom");
         let myName = "";
         let viewMode = ""; 
         let globalPlayers = {};
         let isRoleVisible = false;
-        
+        let timerInterval = null;
         let localNyStrategiVersion = 0; 
         let strategyPopupTimeout = null;
 
@@ -105,81 +122,181 @@
             "Tillidsrepræsentant": "🤝 Du må smugkigge under seminarerne (om natten) for at se, hvem mellemlederne er – men pas på!",
             "Den eksterne konsulent fra PWC": "🕵️‍♂️ Du kan 1 GANG i hele spillet vælge at redde en person fra en natlig fyring ELLER vælge en, der skal fyres i stedet.",
             "Ditte": "📣 Du er øverste leder! På første nat vælger du en anden spiller, som forfremmes til din ekstra Mellemleder.",
-            "Julefrokostpar": "❤️ Du har haft et engangsknald, men kan ikke huske med hvem! I vinder hvis I finder hinanden og erklærer kærligheden foran alle. Gætter du forkert, ryger du ud!"
+            "Gitte": "🤫 Du er Dittes PA. Du kender IKKE ledelsen (og de kender ikke dig), men du vinder med dem! Du vækkes ikke om natten.",
+            "Julefrokostpar": "❤️ Du har haft et engangsknald, men kan ikke huske med hvem! I vinder hvis I finder hinanden og erklærer kærligheden foran alle. Gætter du forkert, ryger du ud!",
+            "Ham der fra 5000": "💻 Du er fra IT! ÉN GANG i løbet af hele spillet (men ikke første nat) kan du tvinge en spiller til at køre en Windows-opdatering. De må overhovedet ikke snakke den efterfølgende dag!",
+            "Bestyrelsesmedlem": "💼 (Uddeles af GD). Du har altid 2 stemmer i dagtimerne. Kan én gang afsløre alle afdødes roller.",
+            "Medarbejder": "👤 Du er en almindelig medarbejder. Overlev Mellemledernes renselser og stem dem ud under Sindedag."
         };
 
-        const allAvailableRoles = ["Mellemleder", "Praktikant", "Kåre", "HR Medarbejder", "Områdedirektør", "Tillidsrepræsentant", "Den eksterne konsulent fra PWC", "Ditte", "Julefrokostpar", "Medarbejder"];
+        const allAvailableRoles = ["Mellemleder", "Praktikant", "Kåre", "HR Medarbejder", "Områdedirektør", "Tillidsrepræsentant", "Den eksterne konsulent fra PWC", "Ditte", "Gitte", "Ham der fra 5000", "Julefrokostpar", "Medarbejder"];
 
-        function initMenu() {
-            const startMenu = document.getElementById('view-mode-selection');
-            if(startMenu) startMenu.style.display = 'block';
-        }
+        // --- MENU & NAVIGATION ---
+
+        window.initMenu = function() {
+            document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
+            document.getElementById('view-mode-selection').style.display = 'block';
+
+            // Populer Rolle-leksikon
+            const lexiconDiv = document.getElementById('lexicon-content');
+            if (lexiconDiv && lexiconDiv.innerHTML === "") {
+                let html = "";
+                for (const [role, desc] of Object.entries(roleDescriptions)) {
+                    html += `<div class="lexicon-item"><strong style="color:var(--color-amber);">${role}</strong><br>${desc}</div>`;
+                }
+                lexiconDiv.innerHTML = html;
+            }
+
+            // Vis reconnect boks hvis der er en gemt session
+            if (savedRoom) {
+                const recBox = document.getElementById('reconnect-player-box');
+                if (recBox) {
+                    recBox.classList.remove('hidden');
+                    recBox.innerHTML = `
+                        <h3 style="margin-top:0; color:var(--color-success);">Session Fundet!</h3>
+                        <p style="font-size:14px; margin-bottom:10px;">Vil du hoppe direkte ind i rum <strong>${savedRoom}</strong>?</p>
+                        <button onclick="reconnectToRoom()" class="btn-success">Gå til min plads</button>
+                    `;
+                }
+            }
+        };
+
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initMenu);
         else initMenu();
 
+        window.goBack = function() { initMenu(); };
+
         window.selectMode = function(mode) {
             viewMode = mode;
-            document.getElementById('view-mode-selection').style.display = 'none';
+            document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
             document.getElementById(`view-${mode}-login`).style.display = 'block';
+        };
+
+        window.reconnectToRoom = function() {
+            viewMode = 'player';
+            document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
+            document.getElementById('view-player-login').style.display = 'block';
+            document.getElementById('room-player').value = savedRoom;
         };
 
         window.connectToRoom = function(mode) {
             const roomInput = document.getElementById(`room-${mode}`).value.toUpperCase().trim();
-            if(!roomInput) return alert("Skriv en rumkode!");
+            if (!roomInput) return alert("Skriv en rumkode!");
             currentRoom = roomInput;
+
+            if (mode === 'player' || mode === 'screen') {
+                localStorage.setItem("savedRoom", currentRoom);
+                savedRoom = currentRoom;
+            }
+
             document.querySelectorAll('.display-room-code').forEach(el => el.innerText = currentRoom);
 
             if (mode === 'player') {
-                myName = document.getElementById('player-name').value.trim();
-                if(!myName) return alert("Skriv dit navn!");
-                set(ref(db, `rooms/${currentRoom}/players/${myPlayerId}`), {
-                    name: myName, role: "Ufordelt", isAlive: true
+                const nameInput = document.getElementById('player-name').value.trim();
+                // Tjek om spilleren allerede eksisterer (rejoin)
+                get(ref(db, `rooms/${currentRoom}/players/${myPlayerId}`)).then(snap => {
+                    if (snap.exists()) {
+                        myName = snap.val().name;
+                    } else {
+                        if (!nameInput) return alert("Skriv dit navn!");
+                        myName = nameInput;
+                        set(ref(db, `rooms/${currentRoom}/players/${myPlayerId}`), {
+                            name: myName, role: "Ufordelt", isAlive: true
+                        });
+                    }
+                    startFirebaseListener();
                 });
+            } else {
+                startFirebaseListener();
             }
-
-            onValue(ref(db, `rooms/${currentRoom}`), (snapshot) => {
-                const data = snapshot.val() || {};
-                renderGame(data);
-            });
 
             document.getElementById(`view-${mode}-login`).style.display = 'none';
             if (mode === 'screen') document.getElementById('view-screen-main').style.display = 'grid';
             else document.getElementById(`view-${mode}-main`).style.display = 'block';
         };
 
+        function startFirebaseListener() {
+            onValue(ref(db, `rooms/${currentRoom}`), (snapshot) => {
+                const data = snapshot.val() || {};
+                renderGame(data);
+            });
+        }
+
+        // --- RENDER ---
+
         function renderGame(data) {
             const players = data.players || {};
-            globalPlayers = players; 
-            const status = data.status || { phase: "SETUP", timer: 180, timerRunning: false, nyStrategiVersion: 0, tjenestemandId: "", usedPWC: false };
+            globalPlayers = players;
+            const status = data.status || { phase: "SETUP", timer: 180, timerRunning: false, nyStrategiVersion: 0, tjenestemandId: "", silencedId: "", usedPWC: false, used5000: false, nightCount: 0, victory: "" };
             const chat = data.linkedin || {};
-            
+
             const boardMemberId = data.boardMemberId || "";
             const boardMemberRevealed = data.boardMemberRevealed || false;
             const ditteChoiceDone = data.ditteChoiceDone || false;
             const scapegoatId = data.scapegoatId || "";
-            const activeCount = Object.values(players).filter(p => p.isAlive).length || 0;
 
+            // VICTORY OVERLAY
+            const victoryOverlay = document.getElementById('global-victory-overlay');
+            if (status.victory) {
+                victoryOverlay.classList.remove('hidden');
+                victoryOverlay.className = `overlay-screen ${status.victory === 'ML' ? 'victory-ml' : status.victory === 'MED' ? 'victory-med' : 'victory-kaare'}`;
+                let html = "";
+                if (status.victory === 'ML') html = `<h1 style="font-size:50px; font-weight:900; margin-bottom:10px;">MELLEMLEDERNE VINDER</h1><p style="font-size:20px; text-transform:uppercase; letter-spacing:2px;">Corporate Culture Triumphs.</p>`;
+                if (status.victory === 'MED') html = `<h1 style="font-size:50px; font-weight:900; margin-bottom:10px;">🎉 MEDARBEJDERNE VINDER 🎉</h1><p style="font-size:24px; font-weight:bold;">24/7 Happy Hour på Klangbar den næste måned!</p>`;
+                if (status.victory === 'KAARE') html = `<h1 style="font-size:60px; font-weight:900; margin-bottom:10px;">🚨 KÅRE VINDER! 🚨</h1><p style="font-size:24px; font-weight:bold;">Han fik endelig sin fyreseddel!</p>`;
+                victoryOverlay.innerHTML = html;
+                return;
+            } else {
+                victoryOverlay.classList.add('hidden');
+            }
+
+            // NY STRATEGI POPUP
             if (status.nyStrategiVersion > localNyStrategiVersion && status.phase === "SINDEDAG (DAG)") {
                 localNyStrategiVersion = status.nyStrategiVersion;
                 triggerStrategyPopup();
             }
 
-            // --- 1. MOBIL SPILER INTERFACE ---
+            // TIMER
+            const mins = Math.floor(status.timer / 60).toString().padStart(2, '0');
+            const secs = (status.timer % 60).toString().padStart(2, '0');
+            const timerStr = `${mins}:${secs}`;
+            if (document.getElementById('big-timer-display')) document.getElementById('big-timer-display').innerText = timerStr;
+            if (document.getElementById('gd-timer-display')) document.getElementById('gd-timer-display').innerText = timerStr;
+            if (document.getElementById('player-timer-display')) document.getElementById('player-timer-display').innerText = timerStr;
+
+            // LINKEDIN FEED
+            const chatKeys = Object.keys(chat);
+            if (chatKeys.length > 0) {
+                const latestMsg = chat[chatKeys[chatKeys.length - 1]];
+                if (document.getElementById('player-latest-msg')) document.getElementById('player-latest-msg').innerHTML = `<span style="color:#6bf; font-weight:bold;">${latestMsg.from}:</span> ${latestMsg.msg}`;
+            }
+            ['screen-linkedin-feed', 'player-linkedin-feed'].forEach(cId => {
+                const container = document.getElementById(cId);
+                if (container) {
+                    container.innerHTML = "";
+                    Object.keys(chat).reverse().forEach(key => {
+                        container.innerHTML += `<div class="li-post"><div class="li-name">🔗 ${chat[key].from}</div><div class="li-text">${chat[key].msg}</div></div>`;
+                    });
+                }
+            });
+
+            // --- 1. MOBIL SPILLER ---
             if (viewMode === 'player') {
                 const me = players[myPlayerId];
                 if (!me || !me.name) return;
 
+                // Bestyrelses-zone
                 const bmZone = document.getElementById('player-bm-zone');
                 if (boardMemberId === myPlayerId && me.isAlive) {
                     bmZone.classList.remove('hidden');
                     bmZone.innerHTML = `
                         <div style="background:var(--color-amber); color:#000; padding:10px; border-radius:6px; font-weight:bold; text-align:center; margin-bottom:10px;">💼 DU ER BESTYRELSESMEDLEM (2 STEMMER)</div>
-                        ${!boardMemberRevealed ? '<button onclick="triggerBoardReveal()" style="background:#10b981; font-size:14px; padding:10px;">🔍 Vend alle fyrede medarbejders kort (1 gang)</button>' : ''}
+                        ${!boardMemberRevealed ? '<button onclick="triggerBoardReveal()" style="background:#10b981; font-size:14px; padding:10px;">🔍 Vend alle fyrede medarbejders kort (1 gang)</button>' : '<p style="color:var(--text-muted); font-size:13px;">Arkiverne er allerede åbnet.</p>'}
                     `;
                 } else if (boardMemberId === myPlayerId && !me.isAlive) {
                     bmZone.classList.remove('hidden');
                     let options = Object.keys(players).filter(id => players[id].isAlive).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
-                    bmZone.innerHTML = `<select id="bm-transfer-select">${options}</select><button onclick="transferBoardMember()" style="background:var(--color-amber); font-size:14px;">Overdrag mandat</button>`;
+                    bmZone.innerHTML = `<p style="font-weight:bold; margin:0 0 8px 0;">Overdrag bestyrelsesmandatet:</p><select id="bm-transfer-select">${options}</select><button onclick="transferBoardMember()" style="background:var(--color-amber); font-size:14px;">Overdrag mandat</button>`;
                 } else {
                     bmZone.classList.add('hidden');
                 }
@@ -187,17 +304,27 @@
                 if (me.isAlive) {
                     document.getElementById('player-status-alive').classList.remove('hidden');
                     document.getElementById('player-status-dead').classList.add('hidden');
-                    
-                    if(me.role === "Ufordelt" || status.phase === "SETUP" || status.phase === "LOBBY_APPROVAL") {
+
+                    if (me.role === "Ufordelt" || status.phase === "SETUP" || status.phase === "LOBBY_APPROVAL") {
                         document.getElementById('player-wait-zone').classList.remove('hidden');
                         document.getElementById('player-role-hidden-zone').classList.add('hidden');
                         document.getElementById('player-role-revealed-zone').classList.add('hidden');
                     } else {
                         document.getElementById('player-wait-zone').classList.add('hidden');
-                        
+
+                        // Pending action alert
+                        let hasPendingAction = false;
+                        if (me.role === "Områdedirektør" && !scapegoatId) hasPendingAction = true;
+                        if (me.role === "Ditte" && !ditteChoiceDone) hasPendingAction = true;
+                        if (me.role === "Ham der fra 5000" && status.phase === "MELLEMLEDERSEMINAR (NAT)" && status.nightCount > 1 && !status.used5000) hasPendingAction = true;
+
                         if (isRoleVisible) {
                             document.getElementById('player-role-hidden-zone').classList.add('hidden');
                             document.getElementById('player-role-revealed-zone').classList.remove('hidden');
+
+                            const alertBox = document.getElementById('player-action-alert');
+                            if (hasPendingAction) alertBox.classList.remove('hidden');
+                            else alertBox.classList.add('hidden');
                         } else {
                             document.getElementById('player-role-hidden-zone').classList.remove('hidden');
                             document.getElementById('player-role-revealed-zone').classList.add('hidden');
@@ -206,29 +333,25 @@
                         document.getElementById('player-role-display').innerText = `Rolle: ${me.role}`;
                         let displayDesc = roleDescriptions[me.role] || "";
 
+                        // Mellemleder: vis medledere
                         if (me.role === "Mellemleder") {
-                            const others = Object.keys(players).filter(id => id !== myPlayerId && players[id].role === "Mellemleder").map(id => players[id].name);
-                            displayDesc += "\n\n🤫 Andre mellemledere: " + (others.length > 0 ? others.join(", ") : "Ingen");
+                            const others = Object.keys(players).filter(id => id !== myPlayerId && (players[id].role === "Mellemleder" || players[id].role === "Ditte")).map(id => players[id].name);
+                            displayDesc += "\n\n🤫 Ledelsen: " + (others.length > 0 ? others.join(", ") : "Kun dig");
                         }
 
-                        // Action Pulse Alert (Inside the revealed zone)
-                        let hasPendingAction = false;
-                        if (me.role === "Områdedirektør" && !scapegoatId) hasPendingAction = true;
-                        if (me.role === "Ditte" && !ditteChoiceDone) hasPendingAction = true;
-
-                        const actionAlert = document.getElementById('player-action-alert');
-                        if (actionAlert) {
-                            if (hasPendingAction) actionAlert.classList.remove('hidden');
-                            else actionAlert.classList.add('hidden');
+                        // Gitte: vis Ditte men ikke Mellemledere
+                        if (me.role === "Gitte") {
+                            const ditte = Object.keys(players).find(id => players[id].role === "Ditte");
+                            displayDesc += ditte ? `\n\n📣 Din chef: ${players[ditte].name} (Ditte)` : "\n\n📣 Ditte er ikke med i dette spil.";
                         }
 
-                        // OMRAADE-DIREKTØR ZONE
+                        // OMRAADEDIREKTØR ZONE
                         if (me.role === "Områdedirektør" && !scapegoatId) {
                             document.getElementById('player-od-zone').classList.remove('hidden');
                             let opts = `<option value="">-- Vælg en ansat --</option>` + Object.keys(players).filter(id => id !== myPlayerId && players[id].isAlive).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
                             document.getElementById('player-od-zone').innerHTML = `
                                 <div style="font-weight:bold; margin-bottom:8px;">👑 Vælg din Syndebuk:</div>
-                                <select id="od-target-select" style="margin-bottom:8px; color:#fff;">${opts}</select>
+                                <select id="od-target-select" style="margin-bottom:8px;">${opts}</select>
                                 <button onclick="odChooseScapegoat()" class="btn-amber">Udnævn Syndebuk</button>
                             `;
                         } else { document.getElementById('player-od-zone').classList.add('hidden'); }
@@ -239,7 +362,7 @@
                             let opts = `<option value="">-- Vælg en ansat --</option>` + Object.keys(players).filter(id => id !== myPlayerId && players[id].role === "Medarbejder" && players[id].isAlive).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
                             document.getElementById('player-ditte-zone').innerHTML = `
                                 <div style="font-weight:bold; margin-bottom:8px;">📣 Udnævn ekstra Mellemleder:</div>
-                                <select id="ditte-target-select" style="margin-bottom:8px; color:#fff;">${opts}</select>
+                                <select id="ditte-target-select" style="margin-bottom:8px;">${opts}</select>
                                 <button onclick="ditteChooseManager()" class="btn-amber">Udnævn Mellemleder</button>
                             `;
                         } else { document.getElementById('player-ditte-zone').classList.add('hidden'); }
@@ -250,20 +373,32 @@
                             let opts = `<option value="">-- Vælg hvem du knaldede med --</option>` + Object.keys(players).filter(id => id !== myPlayerId && players[id].isAlive).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
                             document.getElementById('player-couple-zone').innerHTML = `
                                 <div style="font-weight:bold; margin-bottom:8px;">❤️ Erklær Kærlighed (Valgfrit):</div>
-                                <select id="couple-target-select" style="margin-bottom:8px; color:#fff;">${opts}</select>
+                                <select id="couple-target-select" style="margin-bottom:8px;">${opts}</select>
                                 <button onclick="declareLove()" style="background:#f43f5e;">Erklær Kærlighed!</button>
                             `;
                         } else { document.getElementById('player-couple-zone').classList.add('hidden'); }
 
+                        // 5000 ZONE
+                        if (me.role === "Ham der fra 5000" && status.phase === "MELLEMLEDERSEMINAR (NAT)" && status.nightCount > 1 && !status.used5000) {
+                            document.getElementById('player-5000-zone').classList.remove('hidden');
+                            let opts = `<option value="">-- Vælg en ansat --</option>` + Object.keys(players).filter(id => id !== myPlayerId && players[id].isAlive).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
+                            document.getElementById('player-5000-zone').innerHTML = `
+                                <div style="font-weight:bold; margin-bottom:8px;">💻 Tving en Windows Opdatering:</div>
+                                <select id="it-target-select" style="margin-bottom:8px;">${opts}</select>
+                                <button onclick="itSilencePlayer()" style="background:var(--linkedin-blue);">Installér Opdatering</button>
+                            `;
+                        } else { document.getElementById('player-5000-zone').classList.add('hidden'); }
+
                         document.getElementById('player-role-desc').innerText = displayDesc;
                     }
                 } else {
+                    // Fyret - vis LinkedIn zone
                     document.getElementById('player-status-alive').classList.add('hidden');
                     document.getElementById('player-status-dead').classList.remove('hidden');
                 }
             }
 
-            // --- 2. GENERALDIREKTØR INTERFACE ---
+            // --- 2. GENERALDIREKTØR ---
             if (viewMode === 'gd') {
                 document.getElementById('gd-setup-zone').classList.add('hidden');
                 document.getElementById('gd-approval-zone').classList.add('hidden');
@@ -273,7 +408,7 @@
                 if (status.phase === "SETUP" || !status.phase) {
                     document.getElementById('gd-setup-zone').classList.remove('hidden');
                     document.getElementById('gd-lobby-list').innerHTML = Object.keys(players).map(id => `<li>🟢 ${players[id].name}</li>`).join('') || "<li>Venter på ansatte...</li>";
-                } 
+                }
                 else if (status.phase === "LOBBY_APPROVAL") {
                     document.getElementById('gd-approval-zone').classList.remove('hidden');
                     let apList = document.getElementById('gd-approval-list');
@@ -289,7 +424,7 @@
                 }
                 else if (status.phase === "SINDEDAG (DAG)") {
                     document.getElementById('gd-day-zone').classList.remove('hidden');
-                    
+
                     let selectHtml = '<option value="">-- Vælg Person --</option>';
                     Object.keys(players).filter(id => players[id].isAlive).forEach(id => {
                         selectHtml += `<option value="${id}">${players[id].name} (${players[id].role})</option>`;
@@ -297,19 +432,32 @@
                     document.getElementById('gd-fire-select').innerHTML = selectHtml;
                     document.getElementById('gd-shield-select').innerHTML = selectHtml;
 
+                    let bmOpts = '<option value="">-- Vælg Person --</option>';
+                    Object.keys(players).filter(id => players[id].isAlive).forEach(id => {
+                        bmOpts += `<option value="${id}">${players[id].name}</option>`;
+                    });
+                    document.getElementById('gd-bm-select').innerHTML = bmOpts;
+
                     let listHtml = "";
                     Object.keys(players).forEach(id => {
                         const p = players[id];
                         let badges = "";
-                        if(id === boardMemberId) badges += '<span class="badge-title">Bestyrelse</span>';
-                        if(id === status.tjenestemandId) badges += '🛡️';
-                        listHtml += `<div class="card flex-row" style="padding:10px; margin-bottom:6px;"><div><strong>${p.name}</strong> ${badges}</div> <div style="font-size:13px;">${p.role} ${p.isAlive?'':'❌'}</div></div>`;
+                        if (id === boardMemberId) badges += '<span class="badge-title">Bestyrelse</span>';
+                        if (id === status.tjenestemandId) badges += ' 🛡️';
+                        if (id === status.silencedId && p.isAlive) badges += '<span class="badge-silence">Muted (IT)</span>';
+                        listHtml += `<div class="card flex-row" style="padding:10px; margin-bottom:6px;"><div><strong>${p.name}</strong> ${badges}</div><div style="font-size:13px;">${p.role} ${p.isAlive ? '' : '❌'}</div></div>`;
                     });
                     document.getElementById('gd-day-player-list').innerHTML = listHtml;
                 }
                 else if (status.phase === "MELLEMLEDERSEMINAR (NAT)") {
                     document.getElementById('gd-night-zone').classList.remove('hidden');
-                    
+
+                    let selectHtml = '<option value="">-- Vælg Person --</option>';
+                    Object.keys(players).filter(id => players[id].isAlive).forEach(id => {
+                        selectHtml += `<option value="${id}">${players[id].name} (${players[id].role})</option>`;
+                    });
+                    document.getElementById('gd-night-fire-select').innerHTML = selectHtml;
+
                     let nsHtml = '<option value="">-- Vælg Normal Ansats --</option>';
                     Object.keys(players).filter(id => players[id].isAlive && players[id].role !== "Mellemleder" && players[id].role !== "Ditte").forEach(id => {
                         nsHtml += `<option value="${id}">${players[id].name} (${players[id].role})</option>`;
@@ -318,14 +466,15 @@
 
                     let aliveRoles = Object.keys(players).filter(id => players[id].isAlive).map(id => players[id].role);
                     let wakeHtml = "";
-                    if(aliveRoles.includes('Ditte') && !ditteChoiceDone) wakeHtml += `<li>📣 <strong>Ditte</strong> (Udpeger Mellemleder)</li>`;
-                    if(aliveRoles.includes('Områdedirektør') && !scapegoatId) wakeHtml += `<li>👑 <strong>Områdedirektør</strong> (Udpeger Syndebuk)</li>`;
-                    if(aliveRoles.includes('Mellemleder')) wakeHtml += `<li>💼 <strong>Mellemlederne</strong> (Aftaler fyring) <br><small>Tillidsrepræsentant kigger måske.</small></li>`;
-                    if(aliveRoles.includes('HR Medarbejder')) wakeHtml += `<li>📋 <strong>HR Medarbejder</strong> (Tjekker 1 mappe)</li>`;
-                    if(aliveRoles.includes('Den eksterne konsulent fra PWC')) {
+                    if (aliveRoles.includes('Ditte') && !ditteChoiceDone) wakeHtml += `<li>📣 <strong>Ditte</strong> (Udpeger Mellemleder)</li>`;
+                    if (aliveRoles.includes('Områdedirektør') && !scapegoatId) wakeHtml += `<li>👑 <strong>Områdedirektør</strong> (Udpeger Syndebuk)</li>`;
+                    if (aliveRoles.includes('Mellemleder')) wakeHtml += `<li>💼 <strong>Mellemlederne</strong> (Aftaler fyring)<br><small>Tillidsrepræsentant kigger måske.</small></li>`;
+                    if (aliveRoles.includes('HR Medarbejder')) wakeHtml += `<li>📋 <strong>HR Medarbejder</strong> (Tjekker 1 mappe)</li>`;
+                    if (aliveRoles.includes('Den eksterne konsulent fra PWC')) {
                         wakeHtml += `<li>🕵️‍♂️ <strong>PWC Konsulent</strong> <div><label><input type="checkbox" ${status.usedPWC ? 'checked' : ''} onchange="gdTogglePWC(this.checked)"> Brugt evne?</label></div></li>`;
                     }
-                    if(wakeHtml === "") wakeHtml = "<li>Ingen special-roller tilbage at vække.</li>";
+                    if (aliveRoles.includes('Ham der fra 5000') && status.nightCount > 1 && !status.used5000) wakeHtml += `<li>💻 <strong>Ham der fra 5000</strong> (Tvinger opdatering)</li>`;
+                    if (wakeHtml === "") wakeHtml = "<li>Ingen special-roller tilbage at vække.</li>";
                     document.getElementById('gd-wakeup-list').innerHTML = wakeHtml;
 
                     if (status.tjenestemandId && players[status.tjenestemandId]) {
@@ -334,13 +483,13 @@
                         document.getElementById('gd-night-shield-info').innerHTML = "";
                     }
 
-                    // --- MANUEL STYRING (OVERRIDE) LOGIC ---
+                    // MANUEL STYRING (OVERRIDE)
                     const gdOverrideZone = document.getElementById('gd-override-zone');
                     const gdOverrideOD = document.getElementById('gd-override-od');
                     const gdOverrideDitte = document.getElementById('gd-override-ditte');
+                    const gdOverride5000 = document.getElementById('gd-override-5000');
                     let showOverrideZone = false;
 
-                    // Områdedirektør
                     if (aliveRoles.includes('Områdedirektør') && !scapegoatId) {
                         showOverrideZone = true;
                         gdOverrideOD.classList.remove('hidden');
@@ -351,7 +500,6 @@
                         document.getElementById('gd-override-od-select').innerHTML = odOpts;
                     } else { gdOverrideOD.classList.add('hidden'); }
 
-                    // Ditte
                     if (aliveRoles.includes('Ditte') && !ditteChoiceDone) {
                         showOverrideZone = true;
                         gdOverrideDitte.classList.remove('hidden');
@@ -362,15 +510,25 @@
                         document.getElementById('gd-override-ditte-select').innerHTML = ditteOpts;
                     } else { gdOverrideDitte.classList.add('hidden'); }
 
+                    if (aliveRoles.includes('Ham der fra 5000') && status.nightCount > 1 && !status.used5000) {
+                        showOverrideZone = true;
+                        gdOverride5000.classList.remove('hidden');
+                        let itOpts = '<option value="">-- Vælg Person --</option>';
+                        Object.keys(players).filter(id => players[id].isAlive).forEach(id => {
+                            itOpts += `<option value="${id}">${players[id].name}</option>`;
+                        });
+                        document.getElementById('gd-override-5000-select').innerHTML = itOpts;
+                    } else { gdOverride5000.classList.add('hidden'); }
+
                     if (showOverrideZone) gdOverrideZone.classList.remove('hidden');
                     else gdOverrideZone.classList.add('hidden');
                 }
             }
 
-            // --- 3. STORSKÆRM INTERFACE ---
+            // --- 3. STORSKÆRM ---
             if (viewMode === 'screen') {
                 const screenList = document.getElementById('screen-player-list');
-                
+
                 if (status.phase === "MELLEMLEDERSEMINAR (NAT)") {
                     document.getElementById('screen-night-overlay').classList.remove('hidden');
                 } else {
@@ -383,10 +541,11 @@
                         const p = players[id];
                         let statusText = p.isAlive ? "🟢 Aktiv" : "❌ FYRET";
                         if (!p.isAlive && boardMemberRevealed) statusText = `❌ FYRET (${p.role})`;
-                        
+
                         let badges = "";
-                        if(id === boardMemberId) badges += '<span class="badge-title">Bestyrelse</span>';
-                        if(id === status.tjenestemandId) badges += '<span style="margin-left:8px;" title="Tjenestemandsskjold">🛡️</span>';
+                        if (id === boardMemberId) badges += '<span class="badge-title">Bestyrelse</span>';
+                        if (id === status.tjenestemandId) badges += '<span style="margin-left:8px;" title="Tjenestemandsskjold">🛡️</span>';
+                        if (id === status.silencedId && p.isAlive && status.phase === "SINDEDAG (DAG)") badges += '<span class="badge-silence">WINDOWS OPDATERING</span>';
 
                         screenList.innerHTML += `
                             <div class="card flex-row" style="margin-bottom:8px; padding:12px; background: rgba(255,255,255,0.02)">
@@ -397,163 +556,153 @@
                     });
                 }
             }
-
-            const mins = Math.floor(status.timer / 60).toString().padStart(2, '0');
-            const secs = (status.timer % 60).toString().padStart(2, '0');
-            const timerStr = `${mins}:${secs}`;
-            if(document.getElementById('big-timer-display')) document.getElementById('big-timer-display').innerText = timerStr;
-            if(document.getElementById('gd-timer-display')) document.getElementById('gd-timer-display').innerText = timerStr;
-            if(document.getElementById('player-timer-display')) document.getElementById('player-timer-display').innerText = timerStr;
-
-            const chatKeys = Object.keys(chat);
-            if (chatKeys.length > 0) {
-                const latestMsg = chat[chatKeys[chatKeys.length - 1]];
-                if (document.getElementById('player-latest-msg')) document.getElementById('player-latest-msg').innerHTML = `<span style="color:#6bf; font-weight:bold;">${latestMsg.from}:</span> ${latestMsg.msg}`;
-            }
-
-            ['screen-linkedin-feed', 'player-linkedin-feed'].forEach(cId => {
-                const container = document.getElementById(cId);
-                if(container) {
-                    container.innerHTML = "";
-                    Object.keys(chat).reverse().forEach(key => {
-                        container.innerHTML += `<div class="li-post"><div class="li-name">🔗 ${chat[key].from}</div><div class="li-text">${chat[key].msg}</div></div>`;
-                    });
-                }
-            });
         }
 
+        // --- WINDOW FUNCTIONS ---
+
         window.toggleRoleVisibility = function(visible) {
-            isRoleVisible = visible; 
+            isRoleVisible = visible;
             document.getElementById('player-role-hidden-zone').classList.toggle('hidden', visible);
             document.getElementById('player-role-revealed-zone').classList.toggle('hidden', !visible);
         };
 
-        function triggerStrategyPopup() {
-            if (viewMode === 'gd') return; 
-            const overlay = document.getElementById('global-strategy-overlay');
-            const textEl = document.getElementById('strategy-overlay-text');
-            overlay.classList.remove('hidden');
-
-            if (viewMode === 'screen') {
-                textEl.innerHTML = "🚨 NY STRATEGI UDRULLET I NATTENS MULM OG MØRKE 🚨<br><span style='font-size:20px; font-weight:normal;'>Tjek din telefon!</span>";
-            } else if (viewMode === 'player') {
-                const me = globalPlayers[myPlayerId];
-                if (me.role === "Mellemleder") {
-                    textEl.innerHTML = "🎯 DU ER BLEVET FORFREMMET TIL MELLEMLEDER!<br><span style='font-size:16px; font-weight:normal;'>Velkommen til direktionen.</span>";
-                } else {
-                    textEl.innerHTML = "Ny strategi udrullet...<br><span style='font-size:16px; font-weight:normal;'>Desværre, du blev forbigået i denne runde.</span>";
-                }
+        window.checkGitte = function() {
+            if (document.getElementById('setup-role-Gitte').checked) {
+                document.getElementById('setup-role-Ditte').checked = true;
             }
-
-            if(strategyPopupTimeout) clearTimeout(strategyPopupTimeout);
-            strategyPopupTimeout = setTimeout(() => {
-                overlay.classList.add('hidden');
-            }, 8000); 
-        }
-
-        window.dismissStrategyPopup = function() {
-            document.getElementById('global-strategy-overlay').classList.add('hidden');
-        };
-
-        window.clearEntireRoom = function() {
-            if(!confirm("⚠️ Vil du starte et helt nyt spil?")) return;
-            if(timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-            set(ref(db, `rooms/${currentRoom}`), {
-                status: { phase: "SETUP", timer: 0, timerRunning: false, nyStrategiVersion: 0, tjenestemandId: "", usedPWC: false },
-                boardMemberId: "", boardMemberRevealed: false, loveDeclared: false, ditteChoiceDone: false, scapegoatId: ""
-            });
         };
 
         window.distributeRolesAndStart = function(isReshuffle = false) {
             const playerIds = Object.keys(globalPlayers);
-            if(playerIds.length === 0) return alert("Der er ingen spillere i lobbyen!");
+            if (playerIds.length === 0) return alert("Der er ingen spillere i lobbyen!");
 
             let rolePool = [];
             const mlCount = parseInt(document.getElementById('setup-count-ml').value) || 0;
-            for(let i=0; i < mlCount; i++) rolePool.push("Mellemleder");
+            for (let i = 0; i < mlCount; i++) rolePool.push("Mellemleder");
 
-            const simpleRoles = ['Praktikant', 'Kåre', 'HR Medarbejder', 'Områdedirektør', 'Tillidsrepræsentant', 'PWC', 'Ditte'];
-            simpleRoles.forEach(r => { if(document.getElementById(`setup-role-${r.replace(/ /g, '')}`)?.checked) rolePool.push(r === 'PWC' ? 'Den eksterne konsulent fra PWC' : r); });
-            if(document.getElementById('setup-role-Julefrokostparret')?.checked) { rolePool.push("Julefrokostpar"); rolePool.push("Julefrokostpar"); }
+            const simpleRoles = ['Praktikant', 'Kåre', 'HRMedarbejder', 'Områdedirektør', 'Tillidsrepræsentant', 'PWC', 'Ditte', 'Gitte', '5000'];
+            const roleNameMap = {
+                'HRMedarbejder': 'HR Medarbejder',
+                'PWC': 'Den eksterne konsulent fra PWC',
+                '5000': 'Ham der fra 5000'
+            };
+            simpleRoles.forEach(r => {
+                const el = document.getElementById(`setup-role-${r}`);
+                if (el?.checked) rolePool.push(roleNameMap[r] || r);
+            });
+            if (document.getElementById('setup-role-Julefrokostparret')?.checked) {
+                rolePool.push("Julefrokostpar");
+                rolePool.push("Julefrokostpar");
+            }
 
-            while(rolePool.length < playerIds.length) rolePool.push("Medarbejder");
-            for (let i = rolePool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rolePool[i], rolePool[j]] = [rolePool[j], rolePool[i]]; }
+            while (rolePool.length < playerIds.length) rolePool.push("Medarbejder");
+            // Fisher-Yates shuffle
+            for (let i = rolePool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [rolePool[i], rolePool[j]] = [rolePool[j], rolePool[i]];
+            }
 
-            playerIds.forEach((id, index) => { update(ref(db, `rooms/${currentRoom}/players/${id}`), { role: rolePool[index], isAlive: true }); });
+            playerIds.forEach((id, index) => {
+                update(ref(db, `rooms/${currentRoom}/players/${id}`), { role: rolePool[index], isAlive: true });
+            });
             update(ref(db, `rooms/${currentRoom}/status`), { phase: "LOBBY_APPROVAL" });
         };
 
-        window.gdChangeRole = function(pId, newRole) { update(ref(db, `rooms/${currentRoom}/players/${pId}`), { role: newRole }); };
+        window.gdChangeRole = function(pId, newRole) {
+            update(ref(db, `rooms/${currentRoom}/players/${pId}`), { role: newRole });
+        };
 
         window.gdGoToPhase = function(newPhase) {
-            if(timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-            let payload = { phase: newPhase, timer: 180, timerRunning: false };
-            if (newPhase === "SINDEDAG (DAG)") payload.tjenestemandId = ""; 
-            update(ref(db, `rooms/${currentRoom}/status`), payload);
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            get(ref(db, `rooms/${currentRoom}/status`)).then(snap => {
+                let s = snap.val() || {};
+                let aliveCount = 0;
+                get(ref(db, `rooms/${currentRoom}/players`)).then(pSnap => {
+                    if (pSnap.exists()) {
+                        aliveCount = Object.values(pSnap.val()).filter(p => p.isAlive).length;
+                    }
+                    let defaultTimer = 180;
+                    if (newPhase === "SINDEDAG (DAG)") defaultTimer = Math.max(60, aliveCount * 30);
+
+                    let payload = { phase: newPhase, timer: defaultTimer, timerRunning: false };
+                    if (newPhase === "SINDEDAG (DAG)") payload.tjenestemandId = "";
+                    if (newPhase === "MELLEMLEDERSEMINAR (NAT)") {
+                        payload.silencedId = "";
+                        payload.nightCount = (s.nightCount || 0) + 1;
+                    }
+                    update(ref(db, `rooms/${currentRoom}/status`), payload);
+                });
+            });
         };
 
         window.gdAssignShield = function() {
             const tId = document.getElementById('gd-shield-select').value;
-            if(!tId) return;
+            if (!tId) return;
             update(ref(db, `rooms/${currentRoom}/status`), { tjenestemandId: tId });
             alert("Skjold tildelt!");
         };
 
-        window.gdFirePlayer = function() {
-            const pId = document.getElementById('gd-fire-select').value;
-            if(!pId) return;
-            
+        window.gdFirePlayer = function(selectId = 'gd-fire-select') {
+            const pId = document.getElementById(selectId).value;
+            if (!pId) return;
+
             get(ref(db, `rooms/${currentRoom}`)).then(snap => {
                 const roomData = snap.val() || {};
                 const status = roomData.status || {};
                 const phase = status.phase || "";
                 const shieldId = status.tjenestemandId || "";
                 const scapegoatId = roomData.scapegoatId || "";
-                const targetPlayer = roomData.players[pId] || {};
+                const targetPlayer = roomData.players?.[pId] || {};
 
-                if(shieldId === pId && phase === "MELLEMLEDERSEMINAR (NAT)") {
+                if (shieldId === pId && phase === "MELLEMLEDERSEMINAR (NAT)") {
                     return alert("⚠️ Denne person er beskyttet af Tjenestemandsskjoldet i nat og KAN IKKE fyres!");
                 }
-                
-                if(phase === "MELLEMLEDERSEMINAR (NAT)" && targetPlayer.role === "Praktikant") {
+                if (phase === "MELLEMLEDERSEMINAR (NAT)" && targetPlayer.role === "Praktikant") {
                     return alert("⚠️ Denne person er Praktikant og er IMMUN overfor natlige fyringer!");
                 }
-
-                if(phase === "MELLEMLEDERSEMINAR (NAT)" && targetPlayer.role === "Områdedirektør" && scapegoatId) {
+                if (phase === "MELLEMLEDERSEMINAR (NAT)" && targetPlayer.role === "Områdedirektør" && scapegoatId) {
                     const scapegoat = roomData.players[scapegoatId];
                     if (scapegoat && scapegoat.isAlive) {
-                        alert(`⚠️ Områdedirektøren er immun! De har i stedet udpeget ${scapegoat.name} som syndebuk.\nSyndebukken fyres nu automatisk i stedet!`);
+                        alert(`⚠️ Områdedirektøren er immun! De har udpeget ${scapegoat.name} som syndebuk.\nSyndebukken fyres nu automatisk i stedet!`);
                         update(ref(db, `rooms/${currentRoom}/players/${scapegoatId}`), { isAlive: false });
                         return;
                     }
                 }
 
                 update(ref(db, `rooms/${currentRoom}/players/${pId}`), { isAlive: false });
-                
-                if(targetPlayer.role === "Kåre") {
+
+                if (targetPlayer.role === "Kåre") {
                     alert(`🤯 ${targetPlayer.name} (KÅRE) ER BLEVET FYRET!\nKåre har netop vundet spillet, fordi det var hans skjulte mission!`);
                 }
             });
         };
 
-        window.gdTogglePWC = function(isChecked) { update(ref(db, `rooms/${currentRoom}/status`), { usedPWC: isChecked }); };
+        window.gdTogglePWC = function(isChecked) {
+            update(ref(db, `rooms/${currentRoom}/status`), { usedPWC: isChecked });
+        };
 
         window.gdPromoteStrategy = function() {
             const pId = document.getElementById('gd-strategy-select').value;
-            if(!pId) return alert("Vælg en spiller!");
-            
+            if (!pId) return alert("Vælg en spiller!");
             update(ref(db, `rooms/${currentRoom}/players/${pId}`), { role: "Mellemleder" });
-            
             get(ref(db, `rooms/${currentRoom}/status/nyStrategiVersion`)).then(snap => {
                 let v = snap.val() || 0;
                 update(ref(db, `rooms/${currentRoom}/status`), { nyStrategiVersion: v + 1 });
-                alert("Personen er nu Mellemleder. Storskærm og telefoner vil flashe 'NY STRATEGI', når du skifter til 'Videre til Sindedag'.");
+                alert("Personen er nu Mellemleder. Telefoner og storskærm flasher 'NY STRATEGI', når du skifter til Sindedag.");
             });
+        };
+
+        window.gdAssignBoardMember = function() {
+            const id = document.getElementById('gd-bm-select').value;
+            if (id) {
+                update(ref(db, `rooms/${currentRoom}`), { boardMemberId: id });
+                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Generaldirektøren", msg: `💼 Velkommen til ${globalPlayers[id].name} i bestyrelsen! (2 stemmer)` });
+            }
         };
 
         window.odChooseScapegoat = function() {
             const target = document.getElementById('od-target-select').value;
-            if(target) {
+            if (target) {
                 update(ref(db, `rooms/${currentRoom}`), { scapegoatId: target });
                 alert("Syndebuk valgt! Systemet husker dem automatisk, hvis Mellemlederne forsøger at fyre dig om natten.");
             }
@@ -561,69 +710,75 @@
 
         window.ditteChooseManager = function() {
             const target = document.getElementById('ditte-target-select').value;
-            if(target) { 
-                update(ref(db, `rooms/${currentRoom}/players/${target}`), { role: "Mellemleder" }); 
-                update(ref(db, `rooms/${currentRoom}`), { ditteChoiceDone: true }); 
+            if (target) {
+                update(ref(db, `rooms/${currentRoom}/players/${target}`), { role: "Mellemleder" });
+                update(ref(db, `rooms/${currentRoom}`), { ditteChoiceDone: true });
                 alert("Ny Mellemleder valgt i skjul!");
+            }
+        };
+
+        window.itSilencePlayer = function() {
+            const target = document.getElementById('it-target-select').value;
+            if (target) {
+                update(ref(db, `rooms/${currentRoom}/status`), { silencedId: target, used5000: true });
+                alert("Opdatering installeret! Personen må ikke snakke under den kommende dag.");
             }
         };
 
         window.gdOverrideScapegoat = function() {
             const target = document.getElementById('gd-override-od-select').value;
-            if(target) {
-                update(ref(db, `rooms/${currentRoom}`), { scapegoatId: target });
-                alert("Generaldirektøren har udpeget syndebukken på vegne af Områdedirektøren!");
-            }
+            if (target) { update(ref(db, `rooms/${currentRoom}`), { scapegoatId: target }); alert("Syndebuk valgt via override."); }
         };
 
         window.gdOverrideDitte = function() {
             const target = document.getElementById('gd-override-ditte-select').value;
-            if(target) {
-                update(ref(db, `rooms/${currentRoom}/players/${target}`), { role: "Mellemleder" }); 
-                update(ref(db, `rooms/${currentRoom}`), { ditteChoiceDone: true }); 
-                alert("Generaldirektøren har valgt den nye Mellemleder på vegne af Ditte!");
+            if (target) {
+                update(ref(db, `rooms/${currentRoom}/players/${target}`), { role: "Mellemleder" });
+                update(ref(db, `rooms/${currentRoom}`), { ditteChoiceDone: true });
+                alert("Mellemleder valgt via override.");
             }
+        };
+
+        window.gdOverride5000 = function() {
+            const target = document.getElementById('gd-override-5000-select').value;
+            if (target) { update(ref(db, `rooms/${currentRoom}/status`), { silencedId: target, used5000: true }); alert("IT Mute valgt via override."); }
         };
 
         window.declareLove = function() {
             const target = document.getElementById('couple-target-select').value;
-            if(!target) return;
+            if (!target) return;
             if (globalPlayers[target].role === "Julefrokostpar") {
                 update(ref(db, `rooms/${currentRoom}`), { loveDeclared: true });
-                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "HR", msg: "💖 Breaking: Kærligheden sejrer! Et julefrokostpar har fundet hinanden." });
+                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "HR", msg: "💖 Breaking: Et julefrokostpar har fundet hinanden foran alle!" });
             } else {
                 update(ref(db, `rooms/${currentRoom}/players/${myPlayerId}`), { isAlive: false });
-                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: myName, msg: `💔 Akavet. Jeg erklærede kærlighed til den forkerte. Jeg fritstiller mig selv.` });
-            }
-        };
-
-        window.gdAssignBoardMember = function() {
-            const id = document.getElementById('gd-bm-select').value;
-            if(id) {
-                update(ref(db, `rooms/${currentRoom}`), { boardMemberId: id });
-                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Generaldirektøren", msg: `💼 Velkommen til ${globalPlayers[id].name} i bestyrelsen! (Har nu 2 stemmer)` });
+                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: myName, msg: `💔 Akavet. Jeg erklærede kærlighed til den forkerte. Fritstiller mig selv.` });
             }
         };
 
         window.triggerBoardReveal = function() {
             update(ref(db, `rooms/${currentRoom}`), { boardMemberRevealed: true });
-            push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Bestyrelsen", msg: "🔍 Bestyrelsen har åbnet arkiverne. Rollen på alle fyrede ansatte kan nu ses!" });
+            push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Bestyrelsen", msg: "🔍 Bestyrelsen har åbnet arkiverne. Rollen på alle fyrede kan nu ses!" });
         };
 
         window.transferBoardMember = function() {
             const nextId = document.getElementById('bm-transfer-select').value;
-            if(nextId) {
+            if (nextId) {
                 update(ref(db, `rooms/${currentRoom}`), { boardMemberId: nextId });
-                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Bestyrelsesoverdragelse", msg: `💼 Bestyrelsesmandatet er overdraget til ${globalPlayers[nextId].name}!` });
+                push(ref(db, `rooms/${currentRoom}/linkedin`), { from: "Bestyrelsen", msg: `💼 Mandatet overdraget til ${globalPlayers[nextId].name}!` });
             }
         };
 
-        let timerInterval = null;
+        window.gdTriggerVictory = function(winnerType) {
+            if (!confirm(`Er du sikker på, at du vil afslutte spillet og udråbe ${winnerType} som vinder?`)) return;
+            update(ref(db, `rooms/${currentRoom}/status`), { victory: winnerType });
+        };
+
         window.controlTimer = function(action) {
             const timerRef = ref(db, `rooms/${currentRoom}/status/timer`);
             if (action === 'start') {
                 update(ref(db, `rooms/${currentRoom}/status`), { timerRunning: true });
-                if(!timerInterval) {
+                if (!timerInterval) {
                     timerInterval = setInterval(() => {
                         get(timerRef).then(snap => {
                             let currentT = snap.val();
@@ -633,9 +788,11 @@
                     }, 1000);
                 }
             } else if (action === 'pause') {
-                clearInterval(timerInterval); timerInterval = null; update(ref(db, `rooms/${currentRoom}/status`), { timerRunning: false });
+                clearInterval(timerInterval); timerInterval = null;
+                update(ref(db, `rooms/${currentRoom}/status`), { timerRunning: false });
             } else if (action === 'reset') {
-                clearInterval(timerInterval); timerInterval = null; update(ref(db, `rooms/${currentRoom}/status`), { timer: 180, timerRunning: false });
+                clearInterval(timerInterval); timerInterval = null;
+                update(ref(db, `rooms/${currentRoom}/status`), { timer: 180, timerRunning: false });
             } else if (action === 'add30') {
                 get(timerRef).then(s => set(timerRef, (s.val() || 0) + 30));
             } else if (action === 'sub30') {
@@ -645,28 +802,79 @@
 
         window.postToLinkedIn = function() {
             const input = document.getElementById('linkedin-input');
-            if(input.value.trim()) push(ref(db, `rooms/${currentRoom}/linkedin`), { from: myName, msg: input.value.trim() });
+            if (input.value.trim()) push(ref(db, `rooms/${currentRoom}/linkedin`), { from: myName, msg: input.value.trim() });
             input.value = "";
+        };
+
+        window.clearEntireRoom = function() {
+            if (!confirm("⚠️ Vil du starte et helt nyt spil? Dette fjerner også sejrsskærme.")) return;
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            set(ref(db, `rooms/${currentRoom}`), {
+                status: { phase: "SETUP", timer: 180, timerRunning: false, nyStrategiVersion: 0, tjenestemandId: "", silencedId: "", usedPWC: false, used5000: false, nightCount: 0, victory: "" },
+                boardMemberId: "", boardMemberRevealed: false, loveDeclared: false, ditteChoiceDone: false, scapegoatId: ""
+            });
+        };
+
+        function triggerStrategyPopup() {
+            if (viewMode === 'gd') return;
+            const overlay = document.getElementById('global-strategy-overlay');
+            const textEl = document.getElementById('strategy-overlay-text');
+            overlay.classList.remove('hidden');
+
+            if (viewMode === 'screen') {
+                textEl.innerHTML = "🚨 NY STRATEGI UDRULLET I NATTENS MULM OG MØRKE 🚨<br><span style='font-size:20px; font-weight:normal;'>Tjek din telefon!</span>";
+            } else if (viewMode === 'player') {
+                const me = globalPlayers[myPlayerId];
+                if (me && me.role === "Mellemleder") {
+                    textEl.innerHTML = "🎯 DU ER BLEVET FORFREMMET TIL MELLEMLEDER!<br><span style='font-size:16px; font-weight:normal;'>Velkommen til direktionen.</span>";
+                } else {
+                    textEl.innerHTML = "Ny strategi udrullet...<br><span style='font-size:16px; font-weight:normal;'>Desværre, du blev forbigået i denne runde.</span>";
+                }
+            }
+
+            if (strategyPopupTimeout) clearTimeout(strategyPopupTimeout);
+            strategyPopupTimeout = setTimeout(() => overlay.classList.add('hidden'), 8000);
+        }
+
+        window.dismissStrategyPopup = function() {
+            document.getElementById('global-strategy-overlay').classList.add('hidden');
         };
     </script>
 </head>
 <body>
 
+    <!-- GLOBAL OVERLAYS -->
     <div id="global-strategy-overlay" class="overlay-screen overlay-strategy hidden" onclick="dismissStrategyPopup()">
         <h1 id="strategy-overlay-text" style="font-size: 40px; font-weight: 900; text-transform: uppercase; margin:0; line-height: 1.2;">NY STRATEGI</h1>
+        <p style="font-size:16px; margin-top:20px; opacity:0.8;">Tryk for at lukke</p>
     </div>
 
+    <div id="global-victory-overlay" class="overlay-screen hidden" style="z-index: 2000;"></div>
+
+    <!-- FORSIDE -->
     <div id="view-mode-selection" class="view-section">
         <div class="card" style="text-align: center; padding: 30px 16px;">
             <h1 style="font-size: 28px; margin-bottom: 8px; font-weight: 800;">SINDEDAG</h1>
             <p style="color: var(--text-muted); margin-bottom: 30px; font-size: 14px;">– Det strategiske organisationsspil –</p>
+
+            <div id="reconnect-player-box" class="reconnect-box hidden"></div>
+
             <button onclick="selectMode('player')" class="btn-select" style="background: var(--color-primary)">📱 Jeg er Ansat (Spiller)</button>
             <button onclick="selectMode('gd')" class="btn-select" style="background: var(--color-amber)">💼 Jeg er Generaldirektør</button>
             <button onclick="selectMode('screen')" class="btn-select" style="background: #334155;">🖥️ Sæt Storskærm / TV op</button>
         </div>
+
+        <div class="card">
+            <details>
+                <summary>📖 Rolle-leksikon</summary>
+                <div id="lexicon-content" style="margin-top: 12px;"></div>
+            </details>
+        </div>
     </div>
 
+    <!-- LOGIN VIEWS -->
     <div id="view-player-login" class="view-section">
+        <button onclick="goBack()" class="btn-back">⬅ Tilbage til forside</button>
         <div class="card">
             <h2>Log ind som Ansat</h2>
             <input id="room-player" type="text" placeholder="RUMKODE">
@@ -675,17 +883,36 @@
         </div>
     </div>
 
+    <div id="view-gd-login" class="view-section">
+        <button onclick="goBack()" class="btn-back">⬅ Tilbage til forside</button>
+        <div class="card">
+            <h2>💼 Generaldirektion</h2>
+            <input id="room-gd" type="text" placeholder="RUMKODE">
+            <button onclick="connectToRoom('gd')" class="btn-amber">Opret / Hent</button>
+        </div>
+    </div>
+
+    <div id="view-screen-login" class="view-section">
+        <button onclick="goBack()" class="btn-back">⬅ Tilbage til forside</button>
+        <div class="card" style="text-align: center;">
+            <h2>🖥️ Forbind Mødeskærm</h2>
+            <input id="room-screen" type="text" placeholder="RUMKODE">
+            <button onclick="connectToRoom('screen')">Vis Skærm</button>
+        </div>
+    </div>
+
+    <!-- SPILLER MAIN -->
     <div id="view-player-main" class="view-section">
         <div style="margin-bottom: 12px; font-size: 14px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
             <div>Tid på kontoret: <span id="player-timer-display" style="font-weight:bold; color:#fff; font-size: 16px;">00:00</span></div>
             <div>Møderum: <span class="room-badge display-room-code"></span></div>
         </div>
 
-        <div id="player-latest-linkedin-zone" class="card" style="padding: 12px; font-size: 13px; border-left: 4px solid var(--linkedin-blue); background: rgba(0,0,0,0.15); margin-bottom: 16px;">
+        <div class="card" style="padding: 12px; font-size: 13px; border-left: 4px solid var(--linkedin-blue); background: rgba(0,0,0,0.15); margin-bottom: 16px;">
             <strong style="font-size:11px; text-transform:uppercase; color: var(--linkedin-blue); display:block; margin-bottom:4px;">Seneste fra netværket:</strong>
             <div id="player-latest-msg" style="color: var(--text-main); font-style: italic;">Venter på netværksaktivitet...</div>
         </div>
-        
+
         <div id="player-bm-zone" class="card hidden" style="border: 2px solid var(--color-amber);"></div>
 
         <div id="player-status-alive" class="card" style="text-align:center; padding:16px 12px;">
@@ -693,25 +920,26 @@
                 <h2>Afventer spilstart...</h2>
                 <p style="color: var(--text-muted); font-size:14px;">Generaldirektøren planlægger org-diagrammet.</p>
             </div>
-            
+
             <div id="player-role-hidden-zone" class="hidden" style="padding: 10px 0;">
-                <button id="btn-reveal-role" onclick="toggleRoleVisibility(true)" style="background: var(--color-amber); padding: 22px; font-size: 18px;">👁️ Vis min hemmelige rolle</button>
+                <button onclick="toggleRoleVisibility(true)" style="background: var(--color-amber); padding: 22px; font-size: 18px;">👁️ Vis min hemmelige rolle</button>
             </div>
 
             <div id="player-role-revealed-zone" class="hidden" style="background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: left;">
                 <h2 id="player-role-display" style="color: var(--color-amber); margin-bottom: 10px; text-align: center;">Rolle: -</h2>
-                
+
                 <div id="player-action-alert" class="hidden" style="background:#ef4444; color:#fff; font-weight:bold; padding:10px; border-radius:6px; margin-bottom:15px; animation: flashRed 1.5s infinite alternate; text-align:center;">🚨 DU HAR EN HANDLING DER VENTER!</div>
 
                 <div id="player-od-zone" class="hidden" style="margin-bottom:15px; border: 2px solid var(--color-amber); padding: 10px; border-radius: 6px;"></div>
                 <div id="player-ditte-zone" class="hidden" style="background:#1e293b; padding:10px; border-radius:6px; margin-bottom:15px; border:2px solid var(--color-amber);"></div>
                 <div id="player-couple-zone" class="hidden" style="background:#1e293b; padding:10px; border-radius:6px; margin-bottom:15px; border:2px solid #f43f5e;"></div>
+                <div id="player-5000-zone" class="hidden" style="background:#1e293b; padding:10px; border-radius:6px; margin-bottom:15px; border:2px solid var(--linkedin-blue);"></div>
 
                 <pre id="player-role-desc" style="font-size:14px; line-height: 1.5; color: var(--text-main); margin-bottom: 15px; font-family: inherit; white-space: pre-wrap; margin-top:0;"></pre>
                 <button onclick="toggleRoleVisibility(false)" style="background: #334155; padding: 10px; font-size: 14px; width: 100%; margin: 0;">🙈 Skjul rolle</button>
             </div>
         </div>
-        
+
         <div id="player-status-dead" class="card hidden" style="border-top: 5px solid var(--linkedin-blue);">
             <h2 style="color: var(--linkedin-blue)">💼 Du er Fritstillet</h2>
             <p>Opdater dit professionelle netværk:</p>
@@ -721,21 +949,14 @@
         </div>
     </div>
 
-    <!-- Generaldirektør og Storskærm sektioner uændret -->
-    <div id="view-gd-login" class="view-section">
-        <div class="card">
-            <h2>Generaldirektion</h2>
-            <input id="room-gd" type="text" placeholder="RUMKODE">
-            <button onclick="connectToRoom('gd')" class="btn-amber">Opret / Hent</button>
-        </div>
-    </div>
-
+    <!-- GD MAIN -->
     <div id="view-gd-main" class="view-section">
         <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
             <button onclick="clearEntireRoom()" class="btn-danger" style="padding: 10px; font-size: 13px; margin:0;">🔴 Nyt Spil / Nulstil</button>
             <div style="font-size: 13px; color: var(--text-muted); text-align: center;">Møderum: <span class="room-badge display-room-code"></span></div>
         </div>
 
+        <!-- SETUP -->
         <div id="gd-setup-zone" class="hidden">
             <div class="card">
                 <h2>⚙️ Konfigurer Roller</h2>
@@ -747,6 +968,8 @@
                 <div class="role-grid"><input type="checkbox" id="setup-role-Tillidsrepræsentant"><label>Tillidsrepræsentant 🤝</label></div>
                 <div class="role-grid"><input type="checkbox" id="setup-role-PWC" checked><label>PWC Konsulent 🕵️‍♂️</label></div>
                 <div class="role-grid"><input type="checkbox" id="setup-role-Ditte" checked><label>Ditte 📣</label></div>
+                <div class="role-grid"><input type="checkbox" id="setup-role-Gitte" onchange="checkGitte()"><label>Gitte (Dittes PA) 🤫</label></div>
+                <div class="role-grid"><input type="checkbox" id="setup-role-5000" checked><label>Ham der fra 5000 (IT) 💻</label></div>
                 <div class="role-grid"><input type="checkbox" id="setup-role-Julefrokostparret"><label>Julefrokostparret ❤️</label></div>
                 <button onclick="distributeRolesAndStart()" class="btn-success" style="padding:16px; margin-top: 10px;">🎲 FORDEL ROLLER</button>
             </div>
@@ -756,16 +979,17 @@
             </div>
         </div>
 
+        <!-- APPROVAL -->
         <div id="gd-approval-zone" class="hidden">
             <div class="card">
                 <h2 style="color: var(--color-amber);">🕵️ Godkend Rollefordeling</h2>
-                <p style="font-size:13px; color:var(--text-muted); margin-bottom:15px;">Tilpas manuelt, eller fordel forfra. Tryk "Start Nat 1", når du er tilfreds.</p>
                 <div id="gd-approval-list" style="margin-bottom:15px;"></div>
                 <button onclick="distributeRolesAndStart(true)" style="background: #334155; margin-bottom:10px;">🎲 Fordel alt forfra</button>
                 <button onclick="gdGoToPhase('MELLEMLEDERSEMINAR (NAT)')" class="btn-success" style="padding: 16px; font-size:18px;">✅ START SPIL (Gå til Nat 1)</button>
             </div>
         </div>
 
+        <!-- DAG -->
         <div id="gd-day-zone" class="hidden">
             <div class="gd-nav-bar">
                 <button disabled style="background:#334155; opacity:0.5; margin:0;">☀️ Sindedag (Dag)</button>
@@ -773,40 +997,48 @@
             </div>
 
             <div class="card" style="text-align: center;">
-                <div id="gd-timer-display" style="font-size:36px; font-weight:bold; margin-bottom:10px;">00:00</div>
-                <div style="display:flex; gap:8px; justify-content:center;">
-                    <button onclick="controlTimer('start')" class="btn-success" style="width:auto; padding:10px 20px;">▶️ Start</button>
-                    <button onclick="controlTimer('pause')" class="btn-amber" style="width:auto; padding:10px 20px;">⏸️ Pause</button>
-                    <button onclick="controlTimer('reset')" style="background:#334155; width:auto; padding:10px 20px;">🔄 Nulstil</button>
-                </div>
-                <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
-                    <button onclick="controlTimer('sub30')" style="background:#475569; width:auto; padding:10px 20px;">🕒 -30s</button>
-                    <button onclick="controlTimer('add30')" style="background:#475569; width:auto; padding:10px 20px;">🕒 +30s</button>
-                </div>
-            </div>
-
-            <div class="card" style="border-left: 4px solid var(--color-primary);">
-                <h3>🛡️ Uddel Tjenestemandsskjold</h3>
-                <p style="font-size:12px; color:var(--text-muted); margin-top:0;">Giver beskyttelse under den KOMMENDE nat. Nulstilles i morgen.</p>
-                <div style="display:flex; gap:8px;">
-                    <select id="gd-shield-select" style="margin:0;"></select>
-                    <button onclick="gdAssignShield()" style="width:auto; margin:0; padding:0 20px;">Tildel</button>
+                <div id="gd-timer-display" style="font-size:36px; font-weight:bold; margin-bottom:10px; font-family:monospace;">00:00</div>
+                <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                    <button onclick="controlTimer('start')" class="btn-success" style="width:auto; padding:10px 20px;">▶️</button>
+                    <button onclick="controlTimer('pause')" class="btn-amber" style="width:auto; padding:10px 20px;">⏸️</button>
+                    <button onclick="controlTimer('reset')" style="background:#334155; width:auto; padding:10px 20px;">🔄</button>
+                    <button onclick="controlTimer('add30')" style="background:#475569; width:auto; padding:10px 16px;">+30s</button>
+                    <button onclick="controlTimer('sub30')" style="background:#475569; width:auto; padding:10px 16px;">-30s</button>
                 </div>
             </div>
 
             <div class="card" style="border-left: 4px solid var(--color-danger);">
                 <h3>⚖️ Underskriv Fyreseddel</h3>
-                <p style="font-size:12px; color:var(--text-muted); margin-top:0;">Systemet fanger selv Tjenestemand, Praktikant og Områdedirektørens syndebuk.</p>
                 <select id="gd-fire-select"></select>
                 <button onclick="gdFirePlayer()" class="btn-danger">Fyr Medarbejder</button>
+            </div>
+
+            <div class="card" style="border-left: 4px solid var(--color-amber);">
+                <h3>🛡️ Tjenestemandsskjold</h3>
+                <select id="gd-shield-select"></select>
+                <button onclick="gdAssignShield()" class="btn-amber">Tildel Skjold</button>
+            </div>
+
+            <div class="card" style="border-left: 4px solid #fff;">
+                <h3>💼 Tildel Bestyrelsesmandat</h3>
+                <select id="gd-bm-select"></select>
+                <button onclick="gdAssignBoardMember()" style="background:#6366f1;">Udnævn Bestyrelsesmedlem</button>
             </div>
 
             <div class="card">
                 <h3>👥 Organisationsdiagram</h3>
                 <div id="gd-day-player-list"></div>
             </div>
+
+            <div class="card" style="border-top: 4px solid #fff;">
+                <h3 style="text-align:center;">🏆 GAME OVER PANELER</h3>
+                <button onclick="gdTriggerVictory('ML')" style="background:#111; border: 1px solid #444; color:#fff;">Mellemlederne Vinder</button>
+                <button onclick="gdTriggerVictory('MED')" style="background:linear-gradient(45deg, #10b981, #3b82f6);">Medarbejderne Vinder</button>
+                <button onclick="gdTriggerVictory('KAARE')" style="background:var(--color-danger);">Kåre Vinder</button>
+            </div>
         </div>
 
+        <!-- NAT -->
         <div id="gd-night-zone" class="hidden">
             <div class="gd-nav-bar">
                 <button onclick="gdGoToPhase('SINDEDAG (DAG)')" style="background:#475569; margin:0;">☀️ Videre til Dag</button>
@@ -816,54 +1048,48 @@
             <div id="gd-night-shield-info" style="color:var(--color-primary); margin-bottom:10px; font-size:14px; text-align:center;"></div>
 
             <div class="card" style="border-top: 4px solid #10b981;">
-                <h3 style="color:#10b981;">📋 Huskeliste til Opvågning</h3>
-                <p style="font-size:12px; color:var(--text-muted);">Væk kun disse roller i rækkefølge. Kryds engangsevner af, når de er brugt.</p>
+                <h3 style="color:#10b981;">📋 Huskeliste (Nat)</h3>
                 <ul id="gd-wakeup-list" class="wakeup-list" style="list-style:none; padding:0; margin:0;"></ul>
+            </div>
+
+            <div class="card" style="border-left: 4px solid var(--color-danger);">
+                <h3>⚖️ Fyr om natten</h3>
+                <select id="gd-night-fire-select"></select>
+                <button onclick="gdFirePlayer('gd-night-fire-select')" class="btn-danger">Fyr Medarbejder</button>
+            </div>
+
+            <div class="card" style="border-left: 4px solid var(--color-primary);">
+                <h3>🎯 NY STRATEGI: Forfrem til Mellemleder</h3>
+                <select id="gd-strategy-select"></select>
+                <button onclick="gdPromoteStrategy()" style="background:var(--color-primary);">Udrul Strategi</button>
             </div>
 
             <div id="gd-override-zone" class="card hidden" style="border-top: 4px solid var(--color-amber);">
                 <h3 style="color:var(--color-amber);">🕹️ Manuel Styring (Specialroller)</h3>
-                <p style="font-size:12px; color:var(--text-muted); margin-bottom:15px;">Brug dette, hvis spilleren peger i virkeligheden for at undgå at bruge telefonen i nat. Panelet forsvinder automatisk, når et valg er truffet.</p>
-                
                 <div id="gd-override-od" class="hidden" style="margin-bottom:15px;">
-                    <label style="font-weight:bold; font-size:14px;">👑 Områdedirektørens Syndebuk:</label>
-                    <div style="display:flex; gap:8px; margin-top:5px;">
-                        <select id="gd-override-od-select" style="margin:0;"></select>
-                        <button onclick="gdOverrideScapegoat()" class="btn-amber" style="width:auto; padding:0 20px; margin:0;">Vælg</button>
-                    </div>
+                    <label style="font-weight:bold; font-size:14px; display:block; margin-bottom:6px;">👑 OD Syndebuk:</label>
+                    <select id="gd-override-od-select"></select>
+                    <button onclick="gdOverrideScapegoat()" class="btn-amber">Vælg</button>
                 </div>
-
-                <div id="gd-override-ditte" class="hidden">
-                    <label style="font-weight:bold; font-size:14px;">📣 Dittes Ekstra Mellemleder:</label>
-                    <div style="display:flex; gap:8px; margin-top:5px;">
-                        <select id="gd-override-ditte-select" style="margin:0;"></select>
-                        <button onclick="gdOverrideDitte()" class="btn-amber" style="width:auto; padding:0 20px; margin:0;">Vælg</button>
-                    </div>
+                <div id="gd-override-ditte" class="hidden" style="margin-bottom:15px;">
+                    <label style="font-weight:bold; font-size:14px; display:block; margin-bottom:6px;">📣 Ditte ML:</label>
+                    <select id="gd-override-ditte-select"></select>
+                    <button onclick="gdOverrideDitte()" class="btn-amber">Vælg</button>
                 </div>
-            </div>
-
-            <div class="card" style="border-top: 4px solid var(--color-primary);">
-                <h3 style="color:var(--color-primary);">🚨 Ny Strategi (Forfremmelse)</h3>
-                <p style="font-size:12px; color:var(--text-muted);">Udnævn en normal medarbejder til Mellemleder. Effekten (og flash-alarmen) ruller ud for alle, når du skifter til 'Dag'.</p>
-                <select id="gd-strategy-select"></select>
-                <button onclick="gdPromoteStrategy()" style="background:var(--color-primary);">Udnævn Ny Mellemleder</button>
+                <div id="gd-override-5000" class="hidden">
+                    <label style="font-weight:bold; font-size:14px; display:block; margin-bottom:6px;">💻 IT Mute (5000):</label>
+                    <select id="gd-override-5000-select"></select>
+                    <button onclick="gdOverride5000()" class="btn-amber">Mute Person</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="view-screen-login" class="view-section">
-        <div class="card" style="text-align: center;">
-            <h2>🖥️ Forbind Mødeskærm</h2>
-            <input id="room-screen" type="text" placeholder="RUMKODE">
-            <button onclick="connectToRoom('screen')">Vis Skærm</button>
-        </div>
-    </div>
-
-    <div id="view-screen-main" class="view-section storskærm-layout relative">
-        <div id="screen-night-overlay" class="overlay-screen overlay-night hidden" style="position: absolute; z-index: 500;">
-            <h1 style="font-size: 50px; color: #fff; margin-bottom:10px;">🌙</h1>
-            <h1 style="font-size: 32px; color: #fff; text-transform:uppercase; letter-spacing: 2px;">Ledelsesseminar Pågår</h1>
-            <p style="color: var(--text-muted); font-size: 20px;">Ingen adgang til status-skærmen før i morgen.</p>
+    <!-- STORSKÆRM MAIN -->
+    <div id="view-screen-main" class="view-section storskærm-layout" style="position:relative;">
+        <div id="screen-night-overlay" class="overlay-night-screen hidden">
+            <h1 style="font-size: 32px; color: #fff; text-transform:uppercase; letter-spacing: 2px; margin:0;">🌙 Ledelsesseminar Pågår</h1>
+            <p style="color: var(--text-muted); font-size: 16px; margin: 5px 0 0 0;">Organisationen er lukket indtil i morgen.</p>
         </div>
 
         <div class="card" style="text-align: center; display: flex; flex-direction: column; justify-content: center; padding: 20px; height: 100%; margin: 0;">
@@ -886,8 +1112,6 @@
         </div>
     </div>
 
-    <!-- VERSION FOOTER -->
-    <div class="version-tag">v1.4</div>
-
+    <div class="version-tag">v1.6</div>
 </body>
 </html>
